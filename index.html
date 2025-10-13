@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <link rel="icon" href="logo.png" type="image/png">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analisador de Desempenho de Rede</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+    <style>
+        :root {
+            /* Variáveis de cores (Modo Light Padrão) */
+            --cor-fundo-light: #f4f4f9;
+            --cor-texto-light: #333;
+            --cor-card-light: #ffffff;
+            --cor-principal: #007bff; /* Azul primário */
+            --cor-download: #28a745; /* Verde */
+            --cor-upload: #ffc107; /* Amarelo */
+            --cor-ping: #17a2b8; /* Ciano */
+        }
+
+        /* Modo Dark */
+        .dark-mode {
+            --cor-fundo-light: #121212;
+            --cor-texto-light: #f4f4f9;
+            --cor-card-light: #1e1e1e;
+            --cor-principal: #0099ff; /* Azul mais claro para Dark Mode */
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: var(--cor-fundo-light);
+            color: var(--cor-texto-light);
+            margin: 0;
+            padding: 20px;
+            transition: background-color 0.3s, color 0.3s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 900px;
+        }
+
+        h1 {
+            color: var(--cor-principal);
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2em;
+        }
+
+        /* Cartões de Resultados */
+        .metricas {
+            display: flex;
+            justify-content: space-around;
+            flex-wrap: wrap;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background-color: var(--cor-card-light);
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            margin: 10px;
+            flex: 1;
+            min-width: 180px;
+            text-align: center;
+            transition: background-color 0.3s, box-shadow 0.3s;
+        }
+        .dark-mode .card {
+            box-shadow: 0 4px 8px rgba(255, 255, 255, 0.1);
+        }
+
+        .card h2 {
+            margin: 0 0 10px 0;
+            font-size: 1.1em;
+            color: var(--cor-texto-light);
+        }
+
+        .valor {
+            font-size: 2.5em;
+            font-weight: bold;
+        }
+        
+        .download .valor { color: var(--cor-download); }
+        .upload .valor { color: var(--cor-upload); }
+        .ping .valor { color: var(--cor-ping); }
+
+        /* Gráfico */
+        .grafico-container {
+            background-color: var(--cor-card-light);
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            position: relative;
+        }
+
+        /* Botões e Status */
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            margin: 5px auto;
+            display: block;
+            transition: background-color 0.2s;
+        }
+
+        #btn-iniciar-teste {
+            background-color: var(--cor-principal);
+            color: white;
+            font-size: 1.1em;
+        }
+
+        #btn-iniciar-teste:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        
+        #toggle-dark-mode {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background-color: var(--cor-card-light);
+            color: var(--cor-texto-light);
+            border: 1px solid var(--cor-texto-light);
+            font-size: 0.9em;
+        }
+        
+        #status-teste {
+            text-align: center;
+            margin: 10px 0 20px 0;
+            font-style: italic;
+            font-size: 1.1em;
+        }
+        
+        /* NOVO: Barra de Progresso */
+        .progress-container {
+            width: 100%;
+            height: 30px;
+            background-color: var(--cor-card-light);
+            border-radius: 5px;
+            overflow: hidden;
+            margin: 20px 0;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            position: relative;
+            visibility: hidden; /* Inicialmente oculta */
+        }
+
+        .progress-bar {
+            height: 100%;
+            width: 0%;
+            background-color: var(--cor-principal);
+            transition: width 0.5s ease-out; /* Animação mais suave */
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        .progress-text {
+            position: absolute;
+            width: 100%;
+            line-height: 30px;
+            text-align: center;
+            color: var(--cor-texto-light);
+            font-weight: bold;
+            z-index: 10;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Analisador de Desempenho de Rede</h1>
+
+        <button id="btn-iniciar-teste" onclick="iniciarTeste()">INICIAR TESTE</button>
+
+        <p id="status-teste">Clique em INICIAR para começar.</p>
+
+        <div class="progress-container" id="progress-container">
+            <div id="progress-bar" class="progress-bar"></div>
+            <span id="progress-text" class="progress-text">0%</span>
+        </div>
+
+        <div class="metricas">
+            <div class="card ping">
+                <h2>Ping (Latência)</h2>
+                <div class="valor" id="ping-medio">--</div>
+                <span>ms</span>
+            </div>
+            <div class="card download">
+                <h2>Download</h2>
+                <div class="valor" id="download-medio">--</div>
+                <span>Mbps</span>
+            </div>
+            <div class="card upload">
+                <h2>Upload</h2>
+                <div class="valor" id="upload-medio">--</div>
+                <span>Mbps</span>
+            </div>
+        </div>
+
+        <div class="grafico-container">
+            <canvas id="grafico-velocidade"></canvas>
+        </div>
+    </div>
+    
+    <button id="toggle-dark-mode">Modo Dark</button>
+
+    <script>
+        let grafico;
+        let dadosGrafico = {
+            labels: [],
+            download: [],
+            upload: [],
+            ping: []
+        };
+        
+        // --- Referências de Elementos ---
+        const btn = document.getElementById('btn-iniciar-teste');
+        const status = document.getElementById('status-teste');
+        const progressContainer = document.getElementById('progress-container');
+        const progressBar = document.getElementById('progress-bar');
+        const progressText = document.getElementById('progress-text');
+        const elPing = document.getElementById('ping-medio');
+        const elDownload = document.getElementById('download-medio');
+        const elUpload = document.getElementById('upload-medio');
+        
+        // --- Dark/Light Mode Logic ---
+        const toggleDarkMode = document.getElementById('toggle-dark-mode');
+        const body = document.body;
+
+        function aplicarModo(modo) {
+            if (modo === 'dark') {
+                body.classList.add('dark-mode');
+                toggleDarkMode.textContent = 'Modo Light';
+            } else {
+                body.classList.remove('dark-mode');
+                toggleDarkMode.textContent = 'Modo Dark';
+            }
+            if (grafico) { atualizarEstiloGrafico(); } // Atualiza estilo do gráfico
+            localStorage.setItem('tema', modo);
+        }
+
+        const temaSalvo = localStorage.getItem('tema');
+        aplicarModo(temaSalvo || 'light'); 
+        
+        toggleDarkMode.addEventListener('click', () => {
+            const novoModo = body.classList.contains('dark-mode') ? 'light' : 'dark';
+            aplicarModo(novoModo);
+        });
+        
+        // --- Chart.js Initialization and Update ---
+        function inicializarGrafico() {
+            const ctx = document.getElementById('grafico-velocidade').getContext('2d');
+            
+            if (grafico) { grafico.destroy(); }
+            
+            const isDarkMode = body.classList.contains('dark-mode');
+            const textColor = isDarkMode ? 'white' : 'black';
+            const gridColor = isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+
+            grafico = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: dadosGrafico.labels,
+                    datasets: [
+                        {
+                            label: 'Download (Mbps)',
+                            data: dadosGrafico.download,
+                            borderColor: getComputedStyle(document.documentElement).getPropertyValue('--cor-download'),
+                            backgroundColor: 'rgba(40, 167, 69, 0.2)',
+                            tension: 0.4,
+                            fill: false, 
+                            yAxisID: 'y'
+                        },
+                        {
+                            label: 'Upload (Mbps)',
+                            data: dadosGrafico.upload,
+                            borderColor: getComputedStyle(document.documentElement).getPropertyValue('--cor-upload'),
+                            backgroundColor: 'rgba(255, 193, 7, 0.2)',
+                            tension: 0.4,
+                            fill: false,
+                            yAxisID: 'y'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    interaction: { mode: 'index', intersect: false },
+                    stacked: false,
+                    animation: { duration: 0 },
+                    plugins: { title: { display: false } },
+                    scales: {
+                        y: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            title: { display: true, text: 'Velocidade (Mbps)', color: textColor },
+                            ticks: { color: textColor, beginAtZero: true },
+                            grid: { color: gridColor }
+                        },
+                        x: {
+                            title: { display: true, text: 'Progresso (%)', color: textColor },
+                            ticks: { color: textColor },
+                            grid: { color: gridColor }
+                        }
+                    }
+                }
+            });
+        }
+        
+        function atualizarEstiloGrafico() {
+            if (!grafico) return;
+            const isDarkMode = body.classList.contains('dark-mode');
+            const textColor = isDarkMode ? 'white' : 'black';
+            const gridColor = isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+
+            grafico.options.scales.y.title.color = textColor;
+            grafico.options.scales.y.ticks.color = textColor;
+            grafico.options.scales.y.grid.color = gridColor;
+            grafico.options.scales.x.title.color = textColor;
+            grafico.options.scales.x.ticks.color = textColor;
+            grafico.options.scales.x.grid.color = gridColor;
+            
+            grafico.update();
+        }
+
+        function resetarUI() {
+            dadosGrafico = { labels: [], download: [], upload: [], ping: [] };
+            elPing.textContent = '--';
+            elDownload.textContent = '--';
+            elUpload.textContent = '--';
+            
+            progressContainer.style.visibility = 'hidden';
+            progressBar.style.width = '0%';
+            progressText.textContent = '0%';
+            progressBar.style.backgroundColor = 'var(--cor-principal)';
+            
+            inicializarGrafico();
+        }
+        resetarUI();
+        
+        let resultadoAmostra = { ping: 0, download: 0, upload: 0 };
+        
+        // Função para simular a oscilação (ruído) sobre um valor de base
+        function simularOscilacao(valorBase) {
+            if (valorBase === 0) return 0;
+            // Gera um ruído aleatório de +/- 10%
+            const ruido = valorBase * (Math.random() * 0.2 - 0.1); 
+            return Math.max(0, (valorBase + ruido)).toFixed(2);
+        }
+
+
+        // --- Teste Logic com SSE (Server-Sent Events) ---
+        function iniciarTeste() {
+            resetarUI(); 
+            
+            btn.disabled = true;
+            progressContainer.style.visibility = 'visible';
+            status.textContent = 'Conectando ao servidor e executando o teste de velocidade...';
+
+            const source = new EventSource('/api/teste-stream');
+
+            source.onopen = function() {
+                // O status será atualizado pelo evento 'amostra' e 'progresso'
+            };
+
+            source.onerror = function(err) {
+                console.error('EventSource Error:', err);
+                status.textContent = 'ERRO de Conexão. Verifique o console do navegador e do Python.';
+                progressBar.style.backgroundColor = '#dc3545'; 
+                source.close();
+                btn.disabled = false;
+            };
+
+            source.onmessage = function(event) {
+                try {
+                    const data = JSON.parse(event.data);
+                    
+                    if (data.tipo === 'amostra') {
+                        // Recebe o resultado REAL do teste de velocidade (ocorre uma vez)
+                        resultadoAmostra = { 
+                            ping: data.ping, 
+                            download: data.download, 
+                            upload: data.upload
+                        };
+                        status.textContent = 'Medição completa. Monitorando o progresso da análise...';
+
+                    } else if (data.tipo === 'progresso') {
+                        // Atualiza a barra de progresso e simula a oscilação
+                        const progresso = data.porcentagem;
+                        progressBar.style.width = progresso + '%';
+                        progressText.textContent = progresso + '%';
+
+                        // Simula a oscilação usando o resultado real como base
+                        elPing.textContent = simularOscilacao(resultadoAmostra.ping);
+                        elDownload.textContent = simularOscilacao(resultadoAmostra.download);
+                        elUpload.textContent = simularOscilacao(resultadoAmostra.upload);
+                        
+                        // Adiciona ao gráfico a cada 20% do progresso
+                        if (progresso % 20 === 0 && progresso !== 0 && progresso !== 100) {
+                            // Verifica se o último label já foi adicionado para evitar duplicação devido ao tempo de sleep
+                            if (dadosGrafico.labels.length === 0 || dadosGrafico.labels.slice(-1)[0] !== `${progresso}%`) {
+                                dadosGrafico.labels.push(`${progresso}%`); 
+                                dadosGrafico.download.push(parseFloat(elDownload.textContent));
+                                dadosGrafico.upload.push(parseFloat(elUpload.textContent));
+                                grafico.update();
+                            }
+                        }
+
+                    } else if (data.tipo === 'fim') {
+                        // O evento 'fim' traz o resultado final/médio
+                        progressBar.style.width = '100%';
+                        progressText.textContent = '100%';
+                        
+                        // Fixa os valores finais
+                        elPing.textContent = data.media_ping.toFixed(2);
+                        elDownload.textContent = data.media_download.toFixed(2);
+                        elUpload.textContent = data.media_upload.toFixed(2);
+                        
+                        // Adiciona o último ponto do gráfico (100%)
+                        if (dadosGrafico.labels.slice(-1)[0] !== '100%') {
+                             dadosGrafico.labels.push('100%'); 
+                             dadosGrafico.download.push(data.media_download);
+                             dadosGrafico.upload.push(data.media_upload);
+                             grafico.update();
+                        }
+                        
+                        status.textContent = `Teste Concluído! Média de ${data.total_amostras} amostras.`;
+                        source.close();
+                        btn.disabled = false;
+                    
+                    } else if (data.tipo === 'erro') {
+                        status.textContent = `ERRO na medição: ${data.mensagem}`;
+                    }
+                } catch (e) {
+                    console.error("Erro ao analisar dados recebidos:", e, event.data);
+                    status.textContent = "Erro ao processar dados do servidor.";
+                }
+            };
+        }
+    </script>
+</body>
+</html>
